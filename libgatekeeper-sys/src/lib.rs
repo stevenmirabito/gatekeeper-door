@@ -109,12 +109,19 @@ impl NfcTag<'_> {
         }
     }
 
-    pub fn authenticate(&mut self, realm: &mut Realm) -> Result<(), ()> {
+    // TODO: None of this is super ideal...
+    pub fn authenticate(&mut self, realm: &mut Realm) -> Result<String, ()> {
+        let mut association_id = [0u8; 37];
         let auth_result = unsafe {
-            ffi::authenticate_tag(self.tag, realm.realm)
+            ffi::authenticate_tag(self.tag, realm.realm, association_id.as_mut_ptr())
         };
         if auth_result == 0 { return Err(()); }
-        Ok(())
+
+        let mut association_id = association_id.to_vec();
+        // Pop off NUL byte
+        association_id.pop();
+
+        Ok(String::from_utf8(association_id).unwrap())
     }
 }
 
@@ -130,6 +137,9 @@ pub struct Realm {
     realm: *mut ffi::realm_t,
 }
 
+// A realm is a global thing, it's not tied to a card.
+// Keys here are secrets for that particular project (e.g. drink, gatekeeper)
+// Most likely, the only thing you want to change here is 'association' for each card
 impl Realm {
     pub fn new(
         slot: u8,
